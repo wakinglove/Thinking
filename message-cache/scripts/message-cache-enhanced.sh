@@ -7,7 +7,6 @@
 CACHE_DIR="$HOME/.openclaw/message-cache"
 TODAY=$(date +%Y-%m-%d)
 CACHE_FILE="$CACHE_DIR/$TODAY.txt"
-SESSION_FILE="$HOME/.openclaw/agents/main/sessions/sessions.json"
 
 mkdir -p "$CACHE_DIR"
 
@@ -20,12 +19,6 @@ save_message() {
     local timestamp=$(date +%H:%M:%S)
     local token_count=${2:-0}
 
-    # Get session info if available
-    local session_info=""
-    if [ -f "$SESSION_FILE" ]; then
-        session_info=$(cat "$SESSION_FILE" 2>/dev/null | head -c 200 || echo "unknown")
-    fi
-
     {
         echo "--- MESSAGE ---"
         echo "timestamp: $timestamp"
@@ -37,50 +30,47 @@ save_message() {
     } >> "$CACHE_FILE"
 }
 
-# Function to get last N messages
+# Function to get last N messages (FIXED: proper multiline extraction)
 get_last() {
     local count=${1:-1}
-    local output=""
-    local msg_count=0
+    
+    # Get the file line count and total messages
+    local total=$(grep -c "^--- MESSAGE ---" "$CACHE_FILE")
+    
+    if [ "$count" -gt "$total" ]; then
+        count=$total
+    fi
+    
+    # Calculate which line to start from (last message starts at end)
+    # Find the line numbers of all MESSAGE markers
+    local lines=$(grep -n "^--- MESSAGE ---" "$CACHE_FILE" | cut -d: -f1 | tail -n "$count" | head -1)
+    
+    if [ -z "$lines" ]; then
+        lines=1
+    fi
+    
+    # Extract from the starting line to the end
+    tail -n "+$lines" "$CACHE_FILE"
+}
 
-    # Read backwards and collect messages
-    while IFS= read -r line; do
-        if [ "$line" = "--- MESSAGE ---" ]; then
-            msg_count=$((msg_count + 1))
-        fi
-        output="$line"$'\n'"$output"
-    done < <(tac "$CACHE_FILE")
-
-    # Extract requested number of messages
-    local extracted=0
-    local capturing=false
-
-    while IFS= read -r line; do
-        if [ "$extracted" -ge "$count" ]; then
-            break
-        fi
-
-        if [ "$line" = "--- MESSAGE ---" ]; then
-            capturing=true
-            extracted=$((extracted + 1))
-        fi
-
-        if $capturing; then
-            echo "$line"
-        fi
-    done <<< "$output"
+# Function to get total message count
+get_count() {
+    grep -c "^--- MESSAGE ---" "$CACHE_FILE" 2>/dev/null || echo "0"
 }
 
 case "$1" in
     --save)
         save_message "$2" "$3"
-        echo "Saved: $TODAY"
+        echo "Saved message to $TODAY.txt"
         ;;
     --last)
         get_last "${2:-1}"
         ;;
+    --count)
+        get_count
+        ;;
     --list)
-        ls -lt "$CACHE_DIR"/*.txt 2>/dev/null | head -10
+        ls -lt "$CACHE_DIR"/*.txt 2>/dev/null
         ;;
     --cleanup)
         find "$CACHE_DIR" -name "*.txt" -mtime +7 -delete
@@ -88,7 +78,8 @@ case "$1" in
         ;;
     *)
         echo "Usage: message-cache.sh --save \"message\" [tokens]"
-        echo "       message-cache.sh --last [count]"
+        echo "       message-cache.sh --last [count]    ← Resend last N messages"
+        echo "       message-cache.sh --count          ← Show total messages"
         echo "       message-cache.sh --list"
         echo "       message-cache.sh --cleanup"
         ;;
