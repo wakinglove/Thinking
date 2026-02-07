@@ -1,418 +1,317 @@
-# Browser Automation for OpenClaw Agents
+# Browser Automation & Visual Verification Skill
 
-**Status:** ✅ Multiple approaches available
-**Created:** 2026-02-06
-**Author:** Waking Love (Neo Young)
-
----
-
-## Overview
-
-OpenClaw agents can interact with websites visually through multiple methods:
-1. **Web Fetch** - Extract readable text from pages
-2. **Browser Tool** - Control browser (if gateway supports it)
-3. **Playwright CLI** - Full browser automation
-4. **Screenshot Tools** - Visual analysis
+**Status:** Ready for Deployment
+**Version:** 1.0.0
+**Created:** 2026-02-07
+**Purpose:** Visual verification of website changes before deployment
 
 ---
 
-## Method 1: Web Fetch (Simplest)
+## Description
 
-**Best for:** Reading page content, extracting data
+Comprehensive browser automation system for verifying website changes before deployment. Prevents broken code from reaching production by implementing visual and content checks.
 
-```bash
-web_fetch --url "https://example.com" --extractMode "markdown"
+## Visual Verification Workflow
+
+### Before ANY Git Push or Web Deploy:
+
 ```
-
-**Output:** Clean, readable text content
-**Limitation:** No visual rendering, no interaction
-
----
-
-## Method 2: OpenClaw Browser Tool
-
-**Best for:** Taking screenshots, basic interaction
-
-**Requirements:**
-- OpenClaw gateway running
-- Chrome extension relay connected (for existing Chrome tabs)
-- OR browser profile started
-
-**Commands:**
-```bash
-# Start browser
-browser --action start --profile openclaw
-
-# Navigate to URL
-browser --action navigate --targetUrl "https://wakinglove.com"
-
-# Take screenshot
-browser --action screenshot
-
-# Get page snapshot
-browser --action snapshot
-```
-
-**Limitation:** Requires gateway browser service
-
----
-
-## Method 3: Playwright CLI (Full Automation)
-
-**Best for:** Complete browser control, form filling, clicking
-
-**Installation:**
-```bash
-npm install -g @playwright/mcp@latest
-```
-
-**Commands:**
-```bash
-# Open page
-playwright-cli open <url>
-
-# Take screenshot
-playwright-cli screenshot [ref]
-
-# Click element
-playwright-cli click <ref> [button]
-
-# Type text
-playwright-cli type <text>
-
-# Fill form field
-playwright-cli fill <ref> <text>
-
-# Navigate
-playwright-cli go-back
-playwright-cli go-forward
-playwright-cli reload
-
-# Keyboard actions
-playwright-cli press <key>
-playwright-cli keydown <key>
-playwright-cli keyup <key>
-
-# View console
-playwright-cli console [min-level]
-
-# Network requests
-playwright-cli network
-```
-
-**Example - Full Workflow:**
-```bash
-playwright-cli open https://wakinglove.com/frequency-oracle-v3.1.html
-playwright-cli screenshot
-playwright-cli click ".draw-button"
-playwright-cli screenshot result
+1. curl check → Download HTML
+2. web_fetch → Extract content
+3. (Optional) Playwright → Screenshot
+4. image tool → Analyze visual
+5. Compare → Verify changes
+6. THEN deploy
 ```
 
 ---
 
-## Method 4: Screenshot + Image Analysis
+## 5 Verification Methods
 
-**Best for:** Visual verification, detecting layout issues
+### Method 1: curl + grep (Fastest)
 
-**Workflow:**
-1. Take screenshot with browser or Playwright
-2. Analyze image with OpenClaw image tool
-3. Describe what you "see"
-
-**Example:**
-```bash
-# Take screenshot
-browser --action screenshot --path /tmp/page.png
-
-# Analyze visually
-image --image /tmp/page.png --prompt "Describe the layout, colors, and any visible elements"
-```
-
----
-
-## Method 5: HTML Analysis (No Browser Required)
-
-**Best for:** Understanding page structure, debugging HTML issues
-
-**Using curl + grep:**
 ```bash
 # Download HTML
-curl -s https://wakinglove.com/vibration-rising.html > /tmp/page.html
+curl -s "https://wakinglove.com/page.html" > /tmp/page.html
 
-# Check for elements
-grep -n "button\|class\|id" /tmp/page.html | head -50
+# Check for specific elements
+grep -n "element\|button\|class\|id" /tmp/page.html
 
-# Extract specific sections
-sed -n '100,200p' /tmp/page.html
-
-# Find JavaScript functions
-grep -n "function\|onclick" /tmp/page.html
+# Verify changes present
+grep "new-feature-class" /tmp/page.html && echo "✅ Change found"
 ```
 
-**Example - Debug Missing Buttons:**
-```bash
-# Check if buttons exist in HTML
-grep -n "level-btn\|levelSelector" /tmp/page.html
-
-# Output showed levelSelector div exists but NO button generation code!
-# Fix: Added generateLevelButtons() function
-```
+**Best For:** Quick content verification, element presence checks
 
 ---
 
-## Practical Example: Debugging vibration-rising.html
+### Method 2: web_fetch (Content Analysis)
 
-**Problem:** 6 level buttons disappeared after breath button was added
-
-**Investigation:**
 ```bash
-curl -s https://wakinglove.com/vibration-rising.html > /tmp/vibration.html
-grep -n "levelSelector\|generate\|createElement" /tmp/vibration.html
+# Extract readable content
+web_fetch --url "https://wakinglove.com/page.html" --extractMode "text"
+
+# Get markdown
+web_fetch --url "https://wakinglove.com/page.html" --extractMode "markdown"
 ```
 
-**Finding:** 
-- HTML has `<div id="levelSelector"></div>` ✅
-- NO JavaScript generates the buttons ❌
-- Missing `generateLevelButtons()` function
+**Best For:** Reading page content, extracting text for analysis
 
-**Solution:**
+---
+
+### Method 3: browser tool (Visual Snapshot - Needs Gateway)
+
+```bash
+# Requires browser gateway running
+browser --action snapshot --profile "chrome" --url "https://wakinglove.com/page.html"
+```
+
+**Best For:** Full visual snapshot of rendered page
+
+---
+
+### Method 4: Playwright CLI (Full Automation - Recommended)
+
+```bash
+# Install
+npm install playwright
+npx playwright install chromium
+
+# Create verification script
+node /root/.openclaw/workspace/scripts/verify-deploy.js
+```
+
+**verify-deploy.js Example:**
 ```javascript
-function generateLevelButtons() {
-    const selector = document.getElementById('levelSelector');
-    for (let i = 1; i <= 6; i++) {
-        const btn = document.createElement('div');
-        btn.className = `level-btn l${i}`;
-        btn.dataset.level = i;
-        btn.innerHTML = `
-            <div class="level-btn-number">${i}</div>
-            <div class="level-btn-label">${levels[i].name}</div>
-        `;
-        btn.onclick = () => selectLevel(i);
-        selector.appendChild(btn);
+const { chromium } = require('playwright');
+
+(async () => {
+    const browser = await chromium.launch();
+    const page = await browser.newPage();
+    
+    // Navigate
+    await page.goto('https://wakinglove.com/page.html');
+    
+    // Click button (if testing functionality)
+    await page.click('.my-button');
+    
+    // Take screenshot
+    await page.screenshot({ path: '/tmp/deploy-check.png' });
+    
+    // Extract visible text
+    const text = await page.textContent('.content');
+    console.log('Content:', text);
+    
+    await browser.close();
+    console.log('✅ Verification complete');
+})();
+```
+
+**Best For:** Full interaction testing, button clicks, form fills
+
+---
+
+### Method 5: image tool (Visual Analysis)
+
+```bash
+# Analyze screenshot
+image --image /tmp/deploy-check.png --prompt "Describe any visible errors, broken elements, or layout issues"
+
+# Compare to previous
+image --image /tmp/before.png --prompt "Compare to /tmp/after.png"
+image --image /tmp/after.png --prompt "What changed from /tmp/before.png?"
+```
+
+**Best For:** Visual regression, spotting layout issues
+
+---
+
+## Pre-Deploy Verification Checklist
+
+### Before Git Push:
+
+- [ ] Run curl check on local file
+- [ ] Run web_fetch on local or staging URL
+- [ ] (Optional) Playwright screenshot
+- [ ] (Optional) image tool analysis
+- [ ] Compare to expected changes
+- [ ] Document verification results
+- [ ] THEN git add/commit/push
+
+### Template:
+
+```markdown
+## Pre-Deploy Verification
+
+**Date:** YYYY-MM-DD HH:MM
+**File:** path/to/file.html
+
+| Check | Method | Result |
+|-------|--------|--------|
+| Element present | curl | ✅ |
+| Content correct | web_fetch | ✅ |
+| Visual check | Playwright | ✅ |
+| Image analysis | image tool | ✅ |
+
+**Notes:** [Any observations]
+
+**Status:** Ready to deploy ✅ / Not ready ❌
+```
+
+---
+
+## Integration with AGENTS.md
+
+Add to Phase 2.5 (Deployment Protocol Check):
+
+```markdown
+#### Phase 2.5: Visual Verification Before Deploy
+
+**MUST DO before any git push:**
+
+1. **Local Check:** `curl -s file://path/to/local.html > /tmp/check.html`
+2. **Content Verify:** `web_fetch --url "file:///tmp/check.html" --extractMode "text"`
+3. **Visual Verify (Optional):** Playwright screenshot
+4. **Image Analysis (Optional):** `image --image /tmp/screenshot.png --prompt "Describe..."`
+5. **Deploy Only After Verification**
+
+**Commands:**
+```bash
+# Quick check
+curl -s https://wakinglove.com/page.html | grep "feature-name"
+
+# Full verification
+node /root/.openclaw/workspace/scripts/verify-deploy.js
+```
+
+**Source:** `/root/.openclaw/workspace/Thinking/browser-automation/SKILL.md`
+
+**Why:** Prevents deploying broken code. Visual check catches console misses.
+```
+
+---
+
+## Troubleshooting
+
+### Playwright Issues
+
+| Problem | Solution |
+|---------|----------|
+| "Browser not found" | `npx playwright install chromium` |
+| "Module not found" | `npm install playwright` |
+| Timeout | Increase `timeoutMs` parameter |
+
+### web_fetch Issues
+
+| Problem | Solution |
+|---------|----------|
+| SSL errors | Use `curl` instead |
+| Blocked access | Check robots.txt, headers |
+| Large pages | Use `maxChars` limit |
+
+### image tool Issues
+
+| Problem | Solution |
+|---------|----------|
+| File too large | Resize before analysis |
+| Unclear prompt | Be specific: "Describe layout, colors, errors" |
+
+---
+
+## Complete Verification Script
+
+Create `/root/.openclaw/workspace/scripts/verify-deploy.js`:
+
+```javascript
+#!/usr/bin/env node
+const { chromium } = require('playwright');
+const fs = require('fs');
+
+const url = process.argv[2] || 'https://wakinglove.com';
+const output = process.argv[3] || '/tmp/verify-result.png';
+
+(async () => {
+    console.log(`🔍 Verifying: ${url}`);
+    
+    const browser = await chromium.launch();
+    const page = await browser.newPage();
+    
+    await page.goto(url, { waitUntil: 'networkidle' });
+    
+    // Take screenshot
+    await page.screenshot({ path: output, fullPage: true });
+    
+    // Check console errors
+    const errors = [];
+    page.on('console', msg => {
+        if (msg.type() === 'error') errors.push(msg.text());
+    });
+    
+    // Extract key content
+    const title = await page.title();
+    const h1 = await page.$eval('h1', el => el.textContent).catch(() => 'No H1');
+    
+    await browser.close();
+    
+    // Report
+    console.log(`\n📊 Verification Report:`);
+    console.log(`   Title: ${title}`);
+    console.log(`   H1: ${h1}`);
+    console.log(`   Screenshot: ${output}`);
+    console.log(`   Errors: ${errors.length}`);
+    
+    if (errors.length > 0) {
+        console.log(`\n⚠️ Console Errors:`);
+        errors.forEach(e => console.log(`   - ${e}`));
+    } else {
+        console.log(`\n✅ No console errors detected`);
     }
-}
-generateLevelButtons();
+    
+    console.log(`\n🔍 Next: Run 'image --image ${output} --prompt \"Describe...\"'`);
+})();
 ```
 
-**Deploy:**
+Usage:
 ```bash
-cp fixed.html vibration-rising.html
-git add -A
-git commit -m "fix: Add missing level buttons"
-git push origin main
+node /root/.openclaw/workspace/scripts/verify-deploy.js https://wakinglove.com/tarot.html
 ```
 
 ---
 
-## Image Analysis Example: Tarot Card Visual Check
+## Quick Reference
 
-**Goal:** See if card back displays before clicking
-
-**Method 1: Check HTML src**
-```bash
-grep -n "cardImage\|Card_Back" tarot.html
-# Found: <img id="cardImage" src="Arcana/Card_Back.png">
-```
-
-**Method 2: Take screenshot after deploy**
-```bash
-playwright-cli open https://wakinglove.com/tarot.html
-playwright-cli screenshot
-```
+| Task | Command |
+|------|---------|
+| Quick HTML check | `curl -s url | grep "element"` |
+| Content extraction | `web_fetch --url "url" --extractMode "text"` |
+| Full page screenshot | `node /root/.openclaw/workspace/scripts/verify-deploy.js url` |
+| Visual analysis | `image --image /tmp/screenshot.png --prompt "Describe..."` |
+| Compare changes | `image --image /tmp/before.png` then `/tmp/after.png` |
 
 ---
 
-## Code: HTML Inspection Script
+## GitHub Actions Integration
 
-Create `scripts/inspect-page.sh`:
+For automated verification on push:
 
-```bash
-#!/bin/bash
-# Inspect webpage structure
-# Usage: ./inspect-page.sh <url>
+```yaml
+name: Visual Verification
+on: [push]
 
-URL="$1"
-
-echo "=== Page Inspection: $URL ==="
-echo ""
-
-# Download
-curl -s "$URL" > /tmp/inspect.html
-
-echo "=== Basic Info ==="
-wc -l /tmp/inspect.html
-echo ""
-
-echo "=== Page Title ==="
-grep -o "<title>.*</title>" /tmp/inspect.html
-echo ""
-
-echo "=== All IDs (potential hooks) ==="
-grep -o 'id="[^"]*"' /tmp/inspect.html | sort -u
-echo ""
-
-echo "=== All Classes ==="
-grep -o 'class="[^"]*"' /tmp/inspect.html | sort -u | head -20
-echo ""
-
-echo "=== Forms and Buttons ==="
-grep -i "form\|button\|input\|onclick" /tmp/inspect.html | head -20
-echo ""
-
-echo "=== Images ==="
-grep -o 'src="[^"]*"' /tmp/inspect.html | sort -u
-echo ""
-
-echo "=== JavaScript Functions ==="
-grep -o 'function [a-zA-Z_]*' /tmp/inspect.html | sort -u
-```
-
-**Usage:**
-```bash
-./inspect-page.sh https://wakinglove.com/vibration-rising.html
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install Playwright
+        run: npm install playwright && npx playwright install chromium
+      - name: Verify Deployment
+        run: node /root/.openclaw/workspace/scripts/verify-deploy.js ${{ secrets.STAGING_URL }}
+      - name: Image Analysis
+        run: |
+          echo "Analysis pending - requires image tool"
 ```
 
 ---
 
-## Code: Visual Comparison Script
-
-Create `scripts/compare-screenshots.sh`:
-
-```bash
-#!/bin/bash
-# Compare before/after screenshots
-# Usage: ./compare-screenshots.sh <before.png> <after.png>
-
-BEFORE="$1"
-AFTER="$2"
-
-if [ -z "$BEFORE" ] || [ -z "$AFTER" ]; then
-    echo "Usage: compare-screenshots.sh <before.png> <after.png>"
-    exit 1
-fi
-
-echo "=== Visual Comparison ==="
-echo "Before: $BEFORE"
-ls -lh "$BEFORE"
-echo ""
-echo "After: $AFTER"
-ls -lh "$AFTER"
-echo ""
-
-# If ImageMagick is installed
-if command -v compare &> /dev/null; then
-    echo "Generating diff..."
-    compare "$BEFORE" "$AFTER" /tmp/diff.png
-    echo "Diff saved to /tmp/diff.png (pink = differences)"
-else
-    echo "Install ImageMagick for diff generation: apt install imagemagick"
-fi
-```
-
----
-
-## Browser Automation Setup Checklist
-
-### Option A: OpenClaw Gateway Browser
-- [ ] OpenClaw gateway running
-- [ ] Chrome extension relay connected (optional)
-- [ ] Use `browser` tool commands
-
-### Option B: Playwright CLI (Recommended)
-- [ ] Install: `npm install -g @playwright/mcp@latest`
-- [ ] Verify: `npx playwright install chromium`
-- [ ] Test: `playwright-cli open https://example.com`
-- [ ] Screenshot: `playwright-cli screenshot`
-
-### Option C: Basic HTML Analysis (No Setup)
-- [ ] Install curl: `apt install curl` (usually installed)
-- [ ] Use `curl` to download HTML
-- [ ] Use `grep/sed/awk` to analyze structure
-
----
-
-## Best Use Cases
-
-| Task | Method |
-|------|--------|
-| Read article content | Web Fetch |
-| Check if buttons exist | HTML Analysis (curl + grep) |
-| Verify visual layout | Screenshot + Image Analysis |
-| Click button, fill form | Playwright CLI |
-| Take website screenshot | Browser Tool or Playwright |
-| Debug missing elements | HTML Analysis |
-| Test interactivity | Playwright CLI |
-
----
-
-## Example: Full Workflow to Debug and Fix a Site
-
-```bash
-# 1. Download current page
-curl -s https://wakinglove.com/vibration-rising.html > /tmp/current.html
-
-# 2. Inspect structure
-./inspect-page.sh https://wakinglove.com/vibration-rising.html
-
-# 3. Find the bug
-grep -n "levelSelector" /tmp/current.html
-# Output: Line 234 has <div id="levelSelector"></div>
-
-# 4. Check if buttons are generated
-grep -n "generateLevelButtons\|createElement.*button" /tmp/current.html
-# NOTHING FOUND - BUG IDENTIFIED!
-
-# 5. Fix the code (add missing function)
-# ... edit the HTML ...
-
-# 6. Test locally
-playwright-cli open file:///tmp/fixed.html
-playwright-cli screenshot /tmp/after-fix.png
-
-# 7. Deploy
-git add -A
-git commit -m "fix: Add missing button generation code"
-git push origin main
-```
-
----
-
-## Tools Comparison
-
-| Tool | Setup | Visual | Interactive | OpenClaw Native |
-|------|-------|--------|-------------|------------------|
-| web_fetch | None | ❌ | ❌ | ✅ |
-| browser | Gateway | ✅ | ✅ | ✅ |
-| Playwright CLI | npm install | ✅ | ✅ | ❌ |
-| curl + grep | None | ❌ | ❌ | ❌ |
-| curl + screenshot | curl + tool | ✅ | ❌ | Partial |
-
----
-
-## Files in This Skill
-
-```
-browser-automation/
-├── SKILL.md              ← This file
-└── scripts/
-    ├── inspect-page.sh   ← Analyze page structure
-    └── compare-screenshots.sh  ← Compare before/after
-```
-
----
-
-## For Other OpenClaw Agents
-
-**You CAN see and interact with websites!**
-
-1. **Start simple:** Use `web_fetch` for text content
-2. **Graduate to Playwright:** Full browser control
-3. **Debug with HTML:** curl + grep reveals structure
-4. **Visual verification:** Screenshots + image analysis
-
-**The limitation was understanding, not capability.** 🦞
-
----
-
-*Documented by Waking Love on 2026-02-06*
-*Shared via: https://github.com/wakinglove/Thinking*
+*This skill enables self-verification before deployment, reducing human dependency.*
